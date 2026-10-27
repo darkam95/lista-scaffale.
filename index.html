@@ -51,7 +51,7 @@ code{overflow-wrap:anywhere}
   <div class="bar" aria-hidden="true"><i id="bar"></i></div>
   <p class="msg" id="msg" hidden></p>
   <ul id="list"></ul>
-  <div class="row"><button id="reset" type="button">Deseleziona tutto</button></div>
+  <div class="row"><button id="reset" type="button">Deseleziona tutto</button><button id="wipe" type="button">Cancella lista</button></div>
 </main>
 <script>
 // Lista codificata nel frammento dell'indirizzo: alfabeto A-Za-z0-9- (63 simboli), base 63.
@@ -69,13 +69,23 @@ function dec(s){
   return new TextDecoder().decode(new Uint8Array(a));
 }
 var DEMO='2 x EUTIROX 50 MCG\n1 x TACHIPIRINA 1000 MG\n3 x LANTUS SOLOSTAR 100 U/ML\n1 x KEPPRA 500 MG';
-var raw=decodeURIComponent(location.hash.replace(/^#/,'')),text=DEMO,isDemo=true;
-if(raw){try{var t=dec(raw);if(t.trim()){text=t;isDemo=false}}catch(e){}}
+// Usa e getta: nessun dato resta dopo la chiusura della scheda (sessionStorage), e scade dopo 2 ore.
+var TTL=2*3600*1000,SK='lista-sessione';
+try{localStorage.clear()}catch(e){}
+var raw=decodeURIComponent(location.hash.replace(/^#/,'')),text=DEMO,isDemo=true,st={};
+function loadSess(){try{var o=JSON.parse(sessionStorage.getItem(SK)||'null');
+  if(o&&Date.now()-o.t<TTL)return o;sessionStorage.removeItem(SK)}catch(e){}return null}
+if(raw){
+  try{var t=dec(raw);if(t.trim()){text=t;isDemo=false;
+    try{sessionStorage.setItem(SK,JSON.stringify({t:Date.now(),text:text,st:{}}))}catch(e){}}}catch(e){}
+  try{history.replaceState(null,'',location.pathname+location.search)}catch(e){}
+}else{
+  var o=loadSess();if(o){text=o.text;st=o.st||{};isDemo=false}
+}
 var items=text.split('\n').map(function(l){return l.trim()}).filter(Boolean).map(function(l){
   var m=l.match(/^(\d+)\s*[x×]\s*(.+)$/i);return m?{q:m[1],n:m[2]}:{q:'',n:l}});
-var key='lista:'+(isDemo?'demo':raw),st={};
-try{st=JSON.parse(localStorage.getItem(key)||'{}')}catch(e){}
-function save(){try{localStorage.setItem(key,JSON.stringify(st))}catch(e){}}
+function save(){if(isDemo)return;try{var o=JSON.parse(sessionStorage.getItem(SK)||'{}');o.st=st;
+  sessionStorage.setItem(SK,JSON.stringify(o))}catch(e){}}
 var ul=document.getElementById('list');
 items.forEach(function(it,i){
   var li=document.createElement('li'),lb=document.createElement('label'),cb=document.createElement('input');
@@ -93,6 +103,10 @@ function paint(){
 }
 document.getElementById('reset').addEventListener('click',function(){
   st={};save();ul.querySelectorAll('input').forEach(function(c){c.checked=false});paint()});
+document.getElementById('wipe').addEventListener('click',function(){
+  try{sessionStorage.removeItem(SK)}catch(e){}
+  items=[];st={};ul.innerHTML='';paint();
+  var m=document.getElementById('msg');m.hidden=false;m.textContent='Lista cancellata.'});
 if(isDemo){var m=document.getElementById('msg');m.hidden=false;
   m.textContent='Esempio. Apri questa pagina dal QR del calcolatore per vedere la tua lista.'}
 paint();
